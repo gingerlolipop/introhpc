@@ -130,11 +130,3 @@ less slurm-5580180.err
 q
 ```
 
-## 4. Set up a R virtual environment
-
-
-
-Submit an R job
-
-```bash
-module spider R
