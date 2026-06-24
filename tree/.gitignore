@@ -1,0 +1,11 @@
+# SLURM job logs
+*.out
+
+# Compiled executables
+tree_viz
+tree
+tree_parallel
+
+# Regenerable visualization intermediates
+viz/*/frames/
+viz/*/png/

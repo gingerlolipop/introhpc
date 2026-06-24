@@ -82,12 +82,67 @@ At 1 thread, the parallel executable is **25% slower** than the serial code (0.3
 
 Scaling is near-linear from 1 to 8 threads (0.75× → 2.81×) but sub-linear beyond that (3.28× at 16 threads, 4.49× at 32). The per-cell neighbourhood scan is memory-bound and repeats work across overlapping disks, so adding threads yields diminishing returns once the grid update is sufficiently saturated.
 
-## 6. Artifacts
+## 6. Visualization
+
+To make the spread dynamics visible, we extended the parallel simulator with snapshot export (`tree_viz.chpl`). The approach mirrors the [Chapel Julia-set exercises](https://folio.vastcloud.org/chapel2/chapel-02-variables.html): each grid cell maps to one pixel in a rectangular image, and the landscape is written as a sequence of binary PPM frames.
+
+**Rendering.** Empty cells are drawn as light soil; occupied cells as green. One frame is saved at cycle 0 (founders only) and after every subsequent cycle, giving 13 frames for a 12-cycle run.
+
+**Visualization parameters.** Frames use a 600 × 600 grid with the same seed, radius, and initial tree count as the benchmark. The smaller grid keeps file sizes manageable while preserving the same dispersal pattern. On this grid the population reaches **17 701** trees after 12 cycles.
+
+**Pipeline** (`tree_visualize.sh`). For each thread count (1, 2, 4, 8, 16, 32), the simulator writes PPM frames, ImageMagick converts them to PNG, and ffmpeg assembles a video at 2 frames per second. Because the stochastic model is reproducible across thread counts, every video shows the same landscape evolution; generating one video per thread configuration confirms that parallelism does not alter the result.
+
+### Key frames
+
+Snapshots at cycles 0, 3, 6, 9, and 12 show the cluster of founders expanding into an irregular front as trees disperse outward.
+
+| Cycle | Trees |
+|------:|------:|
+| 0 | 100 |
+| 3 | 693 |
+| 6 | 3 414 |
+| 9 | 9 054 |
+| 12 | 17 701 |
+
+<p align="center">
+  <img src="viz/figures/cycle_000.png" width="180" alt="Cycle 0 — 100 trees"/>
+  <img src="viz/figures/cycle_003.png" width="180" alt="Cycle 3 — 693 trees"/>
+  <img src="viz/figures/cycle_006.png" width="180" alt="Cycle 6 — 3 414 trees"/>
+  <img src="viz/figures/cycle_009.png" width="180" alt="Cycle 9 — 9 054 trees"/>
+  <img src="viz/figures/cycle_012.png" width="180" alt="Cycle 12 — 17 701 trees"/>
+</p>
+
+<p align="center"><em>Left to right: cycles 0, 3, 6, 9, 12.</em></p>
+
+### Spread animation
+
+The animation below plays all 13 frames (cycle 0 through cycle 12) at 2 frames per second. The same movie was generated independently at each thread count; only the 1-thread version is shown here because the landscapes are identical.
+
+<video controls width="480" src="viz/t01/tree_spread_t01.mp4"></video>
+
+<p align="center"><em>Tree spread on a 600 × 600 grid (<code>viz/t01/tree_spread_t01.mp4</code>).</em></p>
+
+Equivalent videos for other thread configurations (same content, different run):
+
+| Threads | Video |
+|--------:|-------|
+| 1 | [tree_spread_t01.mp4](viz/t01/tree_spread_t01.mp4) |
+| 2 | [tree_spread_t02.mp4](viz/t02/tree_spread_t02.mp4) |
+| 4 | [tree_spread_t04.mp4](viz/t04/tree_spread_t04.mp4) |
+| 8 | [tree_spread_t08.mp4](viz/t08/tree_spread_t08.mp4) |
+| 16 | [tree_spread_t16.mp4](viz/t16/tree_spread_t16.mp4) |
+| 32 | [tree_spread_t32.mp4](viz/t32/tree_spread_t32.mp4) |
+
+## 7. Artifacts
 
 | File | Description |
 |------|-------------|
 | `tree2.chpl` | Serial implementation |
 | `tree_parallel.chpl` | Parallel implementation |
+| `tree_viz.chpl` | Parallel simulator with PPM snapshot output |
 | `tree_benchmark.sh` | SLURM benchmark driver |
-| `tree_benchmark_45687164.out` | Full job log |
+| `tree_visualize.sh` | SLURM visualization pipeline (frames, PNGs, videos) |
+| `tree_benchmark_45687164.out` | Full benchmark job log |
 | `tree_scaling_45687164.csv` | Scaling summary (CSV) |
+| `viz/figures/` | Key-frame still images |
+| `viz/t*/tree_spread_*.mp4` | Spread animation per thread count |
