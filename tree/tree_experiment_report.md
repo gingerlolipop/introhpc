@@ -112,11 +112,7 @@ Snapshots at cycles 0, 3, 6, 9, and 12 show founders (dark green) and successive
   <img src="viz/figures/cycle_012.png" width="220" alt="Cycle 12 — 17 655 trees"/>
 </p>
 
-<p align="center"><em>Left to right: cycles 0, 3, 6, 9, 12. Colour = birth cycle (see legend).</em></p>
-
-<p align="center">
-  <img src="viz/figures/legend.png" width="160" alt="Birth-cycle colour legend"/>
-</p>
+<p align="center"><em>Left to right: cycles 0, 3, 6, 9, 12. Colour = birth cycle (legend on the right of each frame).</em></p>
 
 ### Spread animation
 
