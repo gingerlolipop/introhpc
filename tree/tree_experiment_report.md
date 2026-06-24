@@ -86,41 +86,45 @@ Scaling is near-linear from 1 to 8 threads (0.75× → 2.81×) but sub-linear be
 
 To make the spread dynamics visible, we extended the parallel simulator with snapshot export (`tree_viz.chpl`). The approach mirrors the [Chapel Julia-set exercises](https://folio.vastcloud.org/chapel2/chapel-02-variables.html): each grid cell maps to one pixel in a rectangular image, and the landscape is written as a sequence of binary PPM frames.
 
-**Rendering.** Empty cells are drawn as light soil; occupied cells as green. One frame is saved at cycle 0 (founders only) and after every subsequent cycle, giving 13 frames for a 12-cycle run.
+**Rendering.** Empty cells are shown as light soil. Each tree is coloured by its **birth cycle** — founders in dark green, later waves in progressively warmer hues — so successive dispersal fronts are visible. A colour legend is appended to every frame and video. One snapshot is saved at cycle 0 and after each subsequent cycle (13 frames total).
 
-**Visualization parameters.** Frames use a 600 × 600 grid with the same seed, radius, and initial tree count as the benchmark. The smaller grid keeps file sizes manageable while preserving the same dispersal pattern. On this grid the population reaches **17 701** trees after 12 cycles.
+**Visualization parameters.** Frames use a **360 × 360** grid (reduced from 600 × 600) with the same seed, radius, and initial tree count as the benchmark. The smaller landscape raises the occupied fraction to about **14%** by cycle 12 (17 655 trees), making the spread easier to see. Benchmark timing still uses 1200 × 1200.
 
 **Pipeline** (`tree_visualize.sh`). For each thread count (1, 2, 4, 8, 16, 32), the simulator writes PPM frames, ImageMagick converts them to PNG, and ffmpeg assembles a video at 2 frames per second. Because the stochastic model is reproducible across thread counts, every video shows the same landscape evolution; generating one video per thread configuration confirms that parallelism does not alter the result.
 
 ### Key frames
 
-Snapshots at cycles 0, 3, 6, 9, and 12 show the cluster of founders expanding into an irregular front as trees disperse outward.
+Snapshots at cycles 0, 3, 6, 9, and 12 show founders (dark green) and successive dispersal waves in distinct colours. The legend on the right identifies each birth cycle.
 
 | Cycle | Trees |
 |------:|------:|
 | 0 | 100 |
-| 3 | 693 |
-| 6 | 3 414 |
-| 9 | 9 054 |
-| 12 | 17 701 |
+| 3 | 688 |
+| 6 | 3 399 |
+| 9 | 9 077 |
+| 12 | 17 655 |
 
 <p align="center">
-  <img src="viz/figures/cycle_000.png" width="180" alt="Cycle 0 — 100 trees"/>
-  <img src="viz/figures/cycle_003.png" width="180" alt="Cycle 3 — 693 trees"/>
-  <img src="viz/figures/cycle_006.png" width="180" alt="Cycle 6 — 3 414 trees"/>
-  <img src="viz/figures/cycle_009.png" width="180" alt="Cycle 9 — 9 054 trees"/>
-  <img src="viz/figures/cycle_012.png" width="180" alt="Cycle 12 — 17 701 trees"/>
+  <img src="viz/figures/cycle_000.png" width="220" alt="Cycle 0 — 100 founder trees"/>
+  <img src="viz/figures/cycle_003.png" width="220" alt="Cycle 3 — 688 trees"/>
+  <img src="viz/figures/cycle_006.png" width="220" alt="Cycle 6 — 3 399 trees"/>
+  <img src="viz/figures/cycle_009.png" width="220" alt="Cycle 9 — 9 077 trees"/>
+  <img src="viz/figures/cycle_012.png" width="220" alt="Cycle 12 — 17 655 trees"/>
 </p>
 
-<p align="center"><em>Left to right: cycles 0, 3, 6, 9, 12.</em></p>
+<p align="center"><em>Left to right: cycles 0, 3, 6, 9, 12. Colour = birth cycle (see legend).</em></p>
+
+<p align="center">
+  <img src="viz/figures/legend.png" width="160" alt="Birth-cycle colour legend"/>
+</p>
 
 ### Spread animation
 
 The animation below plays all 13 frames (cycle 0 through cycle 12) at 2 frames per second. The same movie was generated independently at each thread count; only the 1-thread version is shown here because the landscapes are identical.
 
-<video controls width="480" src="viz/t01/tree_spread_t01.mp4"></video>
+<video controls width="560" src="viz/t01/tree_spread_t01.mp4"></video>
 
-<p align="center"><em>Tree spread on a 600 × 600 grid (<code>viz/t01/tree_spread_t01.mp4</code>).</em></p>
+<p align="center"><em>Age-coloured spread on a 360 × 360 grid with legend (<code>viz/t01/tree_spread_t01.mp4</code>).</em></p>
 
 Equivalent videos for other thread configurations (same content, different run):
 
@@ -142,7 +146,6 @@ Equivalent videos for other thread configurations (same content, different run):
 | `tree_viz.chpl` | Parallel simulator with PPM snapshot output |
 | `tree_benchmark.sh` | SLURM benchmark driver |
 | `tree_visualize.sh` | SLURM visualization pipeline (frames, PNGs, videos) |
-| `tree_benchmark_45687164.out` | Full benchmark job log |
 | `tree_scaling_45687164.csv` | Scaling summary (CSV) |
-| `viz/figures/` | Key-frame still images |
+| `viz/figures/` | Key-frame still images and colour legend |
 | `viz/t*/tree_spread_*.mp4` | Spread animation per thread count |
