@@ -32,9 +32,9 @@ SIM_ARGS=(
   --report=false
 )
 
-# Species A (greens) and species B (oranges) sample colours at birth cycle 0.
-LEGEND_A_COLOR="#1b4332"
-LEGEND_B_COLOR="#d00000"
+# Okabe–Ito colorblind-friendly pair: blue (A) vs orange (B).
+LEGEND_A_COLOR="#0072B2"
+LEGEND_B_COLOR="#E69F00"
 
 export CHPL_RT_NUM_THREADS_PER_LOCALE_QUIET=yes
 
@@ -53,14 +53,14 @@ make_legend() {
   convert "${out}" \
     -fill "${LEGEND_A_COLOR}" -draw "rectangle 14,${y} 38,$((y + 18))" \
     -font DejaVu-Sans -pointsize 13 -fill '#2c2c2c' \
-    -annotate +48+$((y + 14)) 'A — persistent (greens)' \
+    -annotate +48+$((y + 14)) 'A — persistent (blue)' \
     "${out}"
 
   y=$(( top + row_h ))
   convert "${out}" \
     -fill "${LEGEND_B_COLOR}" -draw "rectangle 14,${y} 38,$((y + 18))" \
     -font DejaVu-Sans -pointsize 13 -fill '#2c2c2c' \
-    -annotate +48+$((y + 14)) 'B — invasive (oranges)' \
+    -annotate +48+$((y + 14)) 'B — invasive (orange)' \
     "${out}"
 
   y=$(( top + 2 * row_h ))

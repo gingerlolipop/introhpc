@@ -13,7 +13,7 @@ Both species start from the **same founder-cluster layout** (`k = 4` random clus
 | Competition | 40% chance when both claim a cell | 60% chance (more invasive) |
 | Role | Persistent resident | Fast colonizer |
 
-Species A is drawn in **greens**; species B in **oranges/reds** in all visualization outputs.
+Species A is drawn in **blues**; species B in **oranges** — an [Okabe–Ito](https://jfly.uni-koeln.de/color/) palette chosen to be distinguishable for common forms of colour blindness.
 
 Serial (`tree2.chpl`) and parallel (`tree_parallel.chpl`) implementations share identical parameters and are compared on the Digital Research Alliance of Canada's **Fir** cluster.
 
@@ -95,7 +95,7 @@ Parallel speedup reaches **6.7×** at 32 threads (1.365 s → 0.204 s). The larg
 
 ## 6. Visualization
 
-`tree_viz.chpl` writes PPM frames coloured by **species** (green vs orange palettes) with hue shading by birth cycle within each species. `tree_visualize.sh` builds PNGs, a two-species legend, and MP4 videos per thread count.
+`tree_viz.chpl` writes PPM frames coloured by **species** (blue vs orange palettes) with lightness shading by birth cycle within each species. `tree_visualize.sh` builds PNGs, a two-species legend, and MP4 videos per thread count.
 
 ### Key frames (360 × 360 grid, same seed)
 
@@ -113,7 +113,7 @@ Parallel speedup reaches **6.7×** at 32 threads (1.365 s → 0.204 s). The larg
 | Cycle 9 | Cycle 12 | Legend |
 | ![Cycle 9](viz/figures/cycle_009.png) | ![Cycle 12](viz/figures/cycle_012.png) | ![Species legend](viz/figures/legend.png) |
 
-*Green = species A (persistent). Orange/red = species B (invasive, semelparous).*
+*Blue = species A (persistent). Orange = species B (invasive, semelparous). Palette is colourblind-friendly.*
 
 ### Spread animation
 

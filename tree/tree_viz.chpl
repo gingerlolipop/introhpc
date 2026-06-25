@@ -2,7 +2,8 @@
   Two-species parallel spread with PPM snapshot output.
 
   Cell encoding: species * 1000 + (birthCycle + 1), where species is 1 (A) or
-  2 (B). Species A is drawn in greens; species B in oranges/reds.
+  2 (B). Species A is drawn in blues; species B in oranges (Okabe–Ito,
+  colorblind-friendly pair).
 */
 
 use Time;
@@ -44,15 +45,15 @@ const emptyR = 237: int(8);
 const emptyG = 232: int(8);
 const emptyB = 220: int(8);
 
-// Species A — greens (darker founders → lighter recent spread).
-const aR = [27, 36, 45, 55, 64, 82, 100, 116, 132, 149, 166, 183, 200]: [0..maxBirth] int(8);
-const aG = [67, 82, 96, 110, 125, 145, 165, 180, 196, 210, 220, 228, 235]: [0..maxBirth] int(8);
-const aB = [50, 58, 66, 74, 82, 100, 118, 130, 142, 155, 168, 180, 192]: [0..maxBirth] int(8);
+// Species A — blues (Okabe–Ito #0072B2 → #56B4E9; darker founders → lighter spread).
+const aR = [  0,  0,  0,  0,  0, 26, 51, 77, 86, 122, 157, 184, 208]: [0..maxBirth] int(8);
+const aG = [ 68, 76, 89, 99, 114, 138, 163, 180, 180, 197, 213, 226, 236]: [0..maxBirth] int(8);
+const aB = [136, 136, 153, 168, 178, 194, 210, 225, 233, 239, 244, 248, 251]: [0..maxBirth] int(8);
 
-// Species B — oranges/reds.
-const bR = [128, 148, 168, 188, 208, 232, 244, 249, 252, 255, 255, 255, 255]: [0..maxBirth] int(8);
-const bG = [40, 50, 60, 72, 84, 100, 87, 65, 50, 38, 28, 20, 15]: [0..maxBirth] int(8);
-const bB = [0, 8, 16, 24, 32, 40, 56, 56, 56, 56, 56, 56, 56]: [0..maxBirth] int(8);
+// Species B — oranges (Okabe–Ito #D55E00 → #E69F00 → #F0E442).
+const bR = [153, 179, 204, 213, 230, 238, 245, 255, 255, 255, 255, 255, 255]: [0..maxBirth] int(8);
+const bG = [ 76,  92, 102,  94, 159, 170, 184, 204, 217, 229, 240, 248, 252]: [0..maxBirth] int(8);
+const bB = [  0,   0,   0,   0,   0,  34,  77, 102, 140, 168, 196, 224, 240]: [0..maxBirth] int(8);
 
 
 proc occupied(val: int): bool {
