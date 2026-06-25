@@ -25,44 +25,55 @@ SIM_ARGS=(
   --minTreesPerCluster=10
   --maxTreesPerCluster=100
   --radius=15
+  --reproProbA=0.35
+  --reproProbB=0.85
+  --winProbB=0.60
   --seed=12345
   --report=false
 )
 
-# Must match ageR/G/B in tree_viz.chpl (cycles 0..12).
-LEGEND_COLORS=(
-  "#1b4332" "#2d6a4f" "#40916c" "#52b788" "#74c494" "#95d5b2"
-  "#b7e4c7" "#f4d35d" "#ee9638" "#f95738" "#c9184a" "#720957" "#3a0ca3"
-)
+# Species A (greens) and species B (oranges) sample colours at birth cycle 0.
+LEGEND_A_COLOR="#1b4332"
+LEGEND_B_COLOR="#d00000"
 
 export CHPL_RT_NUM_THREADS_PER_LOCALE_QUIET=yes
 
 make_legend() {
   local out=$1
-  local row_h=26
+  local row_h=30
   local top=34
-  local h=$(( top + (STEPS + 1) * row_h + 16 ))
+  local h=$(( top + 4 * row_h + 20 ))
 
-  convert -size 200x"${h}" xc:'#faf8f5' \
+  convert -size 240x"${h}" xc:'#faf8f5' \
     -font DejaVu-Sans-Bold -pointsize 14 -fill '#2c2c2c' \
-    -annotate +12+22 'Birth cycle' \
+    -annotate +12+22 'Species' \
     "${out}"
 
-  local y
-  for cycle in $(seq 0 "${STEPS}"); do
-    y=$(( top + cycle * row_h ))
-    local color="${LEGEND_COLORS[$cycle]}"
-    convert "${out}" \
-      -fill "${color}" -draw "rectangle 14,${y} 38,$((y + 18))" \
-      -font DejaVu-Sans -pointsize 13 -fill '#2c2c2c' \
-      -annotate +48+$((y + 14)) "${cycle}" \
-      "${out}"
-  done
-
+  local y=$(( top ))
   convert "${out}" \
-    -fill '#ede8dc' -draw "rectangle 14,$(( top + (STEPS + 1) * row_h )) 38,$(( top + (STEPS + 1) * row_h + 18 ))" \
+    -fill "${LEGEND_A_COLOR}" -draw "rectangle 14,${y} 38,$((y + 18))" \
     -font DejaVu-Sans -pointsize 13 -fill '#2c2c2c' \
-    -annotate +48+$(( top + (STEPS + 1) * row_h + 14 )) 'empty' \
+    -annotate +48+$((y + 14)) 'A — persistent (greens)' \
+    "${out}"
+
+  y=$(( top + row_h ))
+  convert "${out}" \
+    -fill "${LEGEND_B_COLOR}" -draw "rectangle 14,${y} 38,$((y + 18))" \
+    -font DejaVu-Sans -pointsize 13 -fill '#2c2c2c' \
+    -annotate +48+$((y + 14)) 'B — invasive (oranges)' \
+    "${out}"
+
+  y=$(( top + 2 * row_h ))
+  convert "${out}" \
+    -fill '#ede8dc' -draw "rectangle 14,${y} 38,$((y + 18))" \
+    -font DejaVu-Sans -pointsize 13 -fill '#2c2c2c' \
+    -annotate +48+$((y + 14)) 'empty soil' \
+    "${out}"
+
+  y=$(( top + 3 * row_h ))
+  convert "${out}" \
+    -font DejaVu-Sans-Oblique -pointsize 11 -fill '#555555' \
+    -annotate +12+$((y + 12)) 'Hue within each species = birth cycle' \
     "${out}"
 }
 

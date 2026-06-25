@@ -1,9 +1,8 @@
 /*
-  Parallel tree spread with age-coloured PPM snapshot output.
+  Two-species parallel spread with PPM snapshot output.
 
-  Each cell stores a birth cycle (0 = empty; 1..steps+1 encodes birth at
-  cycle 0..steps). Snapshots colour trees by birth cycle so dispersal waves
-  are visible. A colour legend is appended when frames are converted to PNG.
+  Cell encoding: species * 1000 + (birthCycle + 1), where species is 1 (A) or
+  2 (B). Species A is drawn in greens; species B in oranges/reds.
 */
 
 use Time;
@@ -18,37 +17,61 @@ config const k = 4;
 config const minTreesPerCluster = 10;
 config const maxTreesPerCluster = 100;
 config const radius = 15;
+config const reproProbA = 0.35;
+config const reproProbB = 0.85;
+config const winProbB = 0.60;
 config const seed = 12345;
 config const report = true;
 config const outDir = "frames";
 
+const Empty = 0;
+const SpeciesA = 1;
+const SpeciesB = 2;
+
 const Land: domain(2) = {1..rows, 1..cols};
-const maxBirth = steps;  // founders = 0, newest = steps
+const maxBirth = steps;
 
 var tree: [Land] int;
 var nextTree: [Land] atomic int;
+var propA: [Land] atomic int;
+var propB: [Land] atomic int;
+var bDie:  [Land] atomic int;
 
 var founderRng = new randomStream(real, seed);
 var spreadRng  = new randomStream(real, seed + 1);
 
-// Empty soil (warm beige).
 const emptyR = 237: int(8);
 const emptyG = 232: int(8);
 const emptyB = 220: int(8);
 
-// Birth-cycle palette: founders (dark green) → warm hues for recent spread.
-const ageR = [27, 45, 64, 82, 116, 149, 183, 244, 238, 249, 201, 114, 58]: [0..maxBirth] int(8);
-const ageG = [67, 106, 145, 183, 196, 213, 228, 211, 150, 87, 24, 9, 12]: [0..maxBirth] int(8);
-const ageB = [50, 79, 108, 136, 148, 178, 199, 93, 56, 56, 74, 87, 163]: [0..maxBirth] int(8);
+// Species A — greens (darker founders → lighter recent spread).
+const aR = [27, 36, 45, 55, 64, 82, 100, 116, 132, 149, 166, 183, 200]: [0..maxBirth] int(8);
+const aG = [67, 82, 96, 110, 125, 145, 165, 180, 196, 210, 220, 228, 235]: [0..maxBirth] int(8);
+const aB = [50, 58, 66, 74, 82, 100, 118, 130, 142, 155, 168, 180, 192]: [0..maxBirth] int(8);
+
+// Species B — oranges/reds.
+const bR = [128, 148, 168, 188, 208, 232, 244, 249, 252, 255, 255, 255, 255]: [0..maxBirth] int(8);
+const bG = [40, 50, 60, 72, 84, 100, 87, 65, 50, 38, 28, 20, 15]: [0..maxBirth] int(8);
+const bB = [0, 8, 16, 24, 32, 40, 56, 56, 56, 56, 56, 56, 56]: [0..maxBirth] int(8);
 
 
 proc occupied(val: int): bool {
-  return val > 0;
+  return val != Empty;
+}
+
+
+proc speciesOf(val: int): int {
+  return val / 1000;
 }
 
 
 proc birthAge(val: int): int {
-  return val - 1;
+  return (val % 1000) - 1;
+}
+
+
+proc encode(species: int, birthCycle: int): int {
+  return species * 1000 + birthCycle + 1;
 }
 
 
@@ -74,10 +97,18 @@ proc writeSnapshot(cycle: int) {
       const val = tree[i, j];
 
       if occupied(val) {
-        const age = birthAge(val);
-        w.writeBinary(ageR[age]);
-        w.writeBinary(ageG[age]);
-        w.writeBinary(ageB[age]);
+        const sp = speciesOf(val);
+        const age = min(birthAge(val), maxBirth);
+
+        if sp == SpeciesA {
+          w.writeBinary(aR[age]);
+          w.writeBinary(aG[age]);
+          w.writeBinary(aB[age]);
+        } else {
+          w.writeBinary(bR[age]);
+          w.writeBinary(bG[age]);
+          w.writeBinary(bB[age]);
+        }
       } else {
         w.writeBinary(emptyR);
         w.writeBinary(emptyG);
@@ -91,6 +122,25 @@ proc writeSnapshot(cycle: int) {
 }
 
 
+proc plantCluster(ref grid: [Land] int, species: int,
+                  clusterR: int, clusterC: int, clusterSize: int,
+                  halfBox: int) {
+  var planted = 0;
+
+  while planted < clusterSize {
+    const i = clusterR - halfBox +
+              (founderRng.next() * (2 * halfBox + 1)): int;
+    const j = clusterC - halfBox +
+              (founderRng.next() * (2 * halfBox + 1)): int;
+
+    if Land.contains(i, j) && grid[i, j] == Empty {
+      grid[i, j] = encode(species, 0);
+      planted += 1;
+    }
+  }
+}
+
+
 if !exists(outDir) then
   mkdir(outDir, parents=true);
 
@@ -100,7 +150,6 @@ const minR = halfBox + 1;
 const maxR = rows - halfBox;
 const minC = halfBox + 1;
 const maxC = cols - halfBox;
-var initialTrees = 0;
 
 for cluster in 0..<k {
   const clusterSize = minTreesPerCluster +
@@ -110,26 +159,12 @@ for cluster in 0..<k {
   const clusterC = minC +
     (founderRng.next() * (maxC - minC + 1)): int;
 
-  var clusterPlanted = 0;
-
-  while clusterPlanted < clusterSize {
-    const i = clusterR - halfBox +
-              (founderRng.next() * (2 * halfBox + 1)): int;
-    const j = clusterC - halfBox +
-              (founderRng.next() * (2 * halfBox + 1)): int;
-
-    if Land.contains(i, j) && tree[i, j] == 0 {
-      tree[i, j] = 1;  // birth cycle 0 → stored as 1
-      clusterPlanted += 1;
-    }
-  }
-
-  initialTrees += clusterPlanted;
+  plantCluster(tree, SpeciesA, clusterR, clusterC, clusterSize, halfBox);
+  plantCluster(tree, SpeciesB, clusterR, clusterC, clusterSize, halfBox);
 }
 
 writeSnapshot(0);
 
-var treeCount = initialTrees;
 var timer: stopwatch;
 timer.start();
 
@@ -137,50 +172,66 @@ for cycle in 1..steps {
   forall idx in Land do
     nextTree[idx].write(tree[idx]);
 
-  forall (idx, randomValue) in zip(Land, spreadRng.next(Land)) {
+  forall idx in Land {
+    propA[idx].write(0);
+    propB[idx].write(0);
+    bDie[idx].write(0);
+  }
+
+  const reproRolls: [Land] real = spreadRng.next(Land);
+  const targetRolls: [Land] real = spreadRng.next(Land);
+  const competeRolls: [Land] real = spreadRng.next(Land);
+
+  forall (idx, reproRoll, targetRoll) in zip(Land, reproRolls, targetRolls) {
     const (i, j) = idx;
+    const val = tree[i, j];
 
-    if occupied(tree[i, j]) {
-      var otherTree = false;
-      var emptyCount = 0;
+    if !occupied(val) then continue;
 
-      for di in -radius..radius {
+    const species = speciesOf(val);
+    var otherTree = false;
+    var emptyCount = 0;
+
+    for di in -radius..radius {
+      for dj in -radius..radius {
+        if di*di + dj*dj <= radius*radius {
+          const ni = i + di;
+          const nj = j + dj;
+
+          if Land.contains(ni, nj) {
+            if (di != 0 || dj != 0) && occupied(tree[ni, nj]) then
+              otherTree = true;
+
+            if tree[ni, nj] == Empty then
+              emptyCount += 1;
+          }
+        }
+      }
+    }
+
+    const reproProb = if species == SpeciesA then reproProbA else reproProbB;
+
+    if otherTree && emptyCount > 0 && reproRoll < reproProb {
+      const target = min((targetRoll * emptyCount): int, emptyCount - 1);
+      var seen = 0;
+
+      label place for di in -radius..radius {
         for dj in -radius..radius {
           if di*di + dj*dj <= radius*radius {
             const ni = i + di;
             const nj = j + dj;
 
-            if Land.contains(ni, nj) {
-              if (di != 0 || dj != 0) && occupied(tree[ni, nj]) then
-                otherTree = true;
-
-              if tree[ni, nj] == 0 then
-                emptyCount += 1;
-            }
-          }
-        }
-      }
-
-      if otherTree && emptyCount > 0 {
-        const target = min((randomValue * emptyCount): int,
-                           emptyCount - 1);
-        var seen = 0;
-        const newborn = cycle + 1;  // birth cycle cycle → stored as cycle+1
-
-        label place for di in -radius..radius {
-          for dj in -radius..radius {
-            if di*di + dj*dj <= radius*radius {
-              const ni = i + di;
-              const nj = j + dj;
-
-              if Land.contains(ni, nj) && tree[ni, nj] == 0 {
-                if seen == target {
-                  nextTree[ni, nj].write(newborn);
-                  break place;
+            if Land.contains(ni, nj) && tree[ni, nj] == Empty {
+              if seen == target {
+                if species == SpeciesA then
+                  propA[ni, nj].write(1);
+                else {
+                  propB[ni, nj].write(1);
+                  bDie[i, j].write(1);
                 }
-
-                seen += 1;
+                break place;
               }
+              seen += 1;
             }
           }
         }
@@ -188,22 +239,51 @@ for cycle in 1..steps {
     }
   }
 
+  forall idx in Land {
+    if tree[idx] != Empty then continue;
+
+    if propA[idx].read() > 0 && propB[idx].read() > 0 {
+      if competeRolls[idx] < winProbB then
+        nextTree[idx].write(encode(SpeciesB, cycle));
+      else
+        nextTree[idx].write(encode(SpeciesA, cycle));
+    } else if propB[idx].read() > 0 then
+      nextTree[idx].write(encode(SpeciesB, cycle));
+    else if propA[idx].read() > 0 then
+      nextTree[idx].write(encode(SpeciesA, cycle));
+  }
+
+  forall idx in Land do
+    if bDie[idx].read() > 0 then
+      nextTree[idx].write(Empty);
+
   forall idx in Land do
     tree[idx] = nextTree[idx].read();
 
-  treeCount = 0;
-  for idx in Land do
-    if occupied(tree[idx]) then
-      treeCount += 1;
-
   writeSnapshot(cycle);
 
-  if report then
-    writeln("cycle ", cycle, ": ", treeCount, " trees");
+  if report {
+    var countA = 0;
+    var countB = 0;
+    for idx in Land {
+      if speciesOf(tree[idx]) == SpeciesA then countA += 1;
+      else if speciesOf(tree[idx]) == SpeciesB then countB += 1;
+    }
+    writeln("cycle ", cycle, ": ", countA + countB,
+            " trees (A=", countA, ", B=", countB, ")");
+  }
 }
 
 timer.stop();
 
-writeln("Final tree count: ", treeCount);
+var finalA = 0;
+var finalB = 0;
+for idx in Land {
+  if speciesOf(tree[idx]) == SpeciesA then finalA += 1;
+  else if speciesOf(tree[idx]) == SpeciesB then finalB += 1;
+}
+
+writeln("Final tree count: ", finalA + finalB,
+        " (A=", finalA, ", B=", finalB, ")");
 writeln("Snapshots written to ", outDir, "/");
 writeln("Simulation finished in ", timer.elapsed(), " seconds");

@@ -22,6 +22,9 @@ ARGS=(
   --minTreesPerCluster=10
   --maxTreesPerCluster=100
   --radius=15
+  --reproProbA=0.35
+  --reproProbB=0.85
+  --winProbB=0.60
   --seed=12345
   --report=false
 )

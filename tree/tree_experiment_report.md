@@ -1,53 +1,57 @@
-# Tree Seed Spread Simulation: Experiment Report
+# Tree Seed Spread Simulation: BAM Two-Species Experiment Report
 
 ## 1. Overview
 
-We simulate how trees colonize a two-dimensional landscape over discrete time steps. The landscape is a rectangular grid: each cell is either empty or occupied by one tree. Starting from **k randomly placed founder clusters** of varying size, trees spread outward cycle by cycle according to a simple dispersal rule. Over 12 cycles on a 1200 × 1200 grid with `k = 4`, the population grows from 199 founders to 60 075 trees.
+Classical ecological niche models (ENMs / SDMs) map species distributions using **environmental variables only**. The BAM diagram reminds us that realized distributions also depend on **Biotic** interactions, **Abiotic** suitability, and **Migration** (dispersal). This experiment extends our grid-based dispersal model toward the **Biotic** and **Migration** axes by simulating **two competing tree species** on the same landscape.
 
-The computational goal is to measure how much faster this simulation runs when the grid update is parallelized across CPU cores. Two Chapel programs implement the same model:
+Both species start from the **same founder-cluster layout** (`k = 4` random clusters, 10–100 trees per cluster per species). They disperse under the same abiotic grid (fixed boundaries, circular dispersal neighbourhoods) but differ biologically:
 
-- **`tree2.chpl`** — serial baseline using `for` loops
-- **`tree_parallel.chpl`** — shared-memory parallel version using `forall`, atomic writes, and parallel reduction
+| | Species A | Species B |
+|---|-----------|-----------|
+| Regeneration | Slower (`reproProbA = 0.35`) | Faster (`reproProbB = 0.85`) |
+| Lifespan | Long-lived; never dies | Dies after successful reproduction |
+| Competition | 40% chance when both claim a cell | 60% chance (more invasive) |
+| Role | Persistent resident | Fast colonizer |
 
-Both are compiled with `chpl --fast` and compared on the Digital Research Alliance of Canada's **Fir** cluster.
+Species A is drawn in **greens**; species B in **oranges/reds** in all visualization outputs.
+
+Serial (`tree2.chpl`) and parallel (`tree_parallel.chpl`) implementations share identical parameters and are compared on the Digital Research Alliance of Canada's **Fir** cluster.
 
 ## 2. Simulation Model
 
-### The landscape
+### Landscape and encoding
 
-The landscape is a flat `rows × cols` grid of cells, indexed like a map. At any moment, each cell holds one of two states:
+Each cell holds:
 
 | Value | Meaning |
 |------:|---------|
-| 0 | empty — no tree |
-| 1 | occupied — one tree |
+| 0 | empty |
+| 1 | species A |
+| 2 | species B |
 
-The grid has fixed boundaries: trees cannot spread beyond its edges. In the benchmark run, the grid is 1200 × 1200 cells (1.44 million sites).
+The benchmark grid is 1200 × 1200; visualization uses 360 × 360 with the same seed and ecological parameters.
 
-### Dispersal rule
+### Dispersal and reproduction
 
-Time advances in **cycles**. Within each cycle, every tree that existed at the *start* of the cycle is evaluated independently and simultaneously. A tree can produce at most one new tree per cycle, and only under two conditions:
+Time advances in synchronous **cycles**. At the start of each cycle, every tree is evaluated:
 
-1. **Neighbourhood presence** — at least one *other* tree (not itself) lies within a circular dispersal radius `r` centred on that tree.
-2. **Room to land** — at least one empty cell exists within that same circle.
+1. **Neighbourhood presence** — at least one other tree (either species) within dispersal radius `r`.
+2. **Room to land** — at least one empty cell in the same disk.
+3. **Regeneration draw** — species A reproduces with probability 0.35; species B with 0.85.
 
-If both conditions hold, the tree disperses one seed to a single empty cell chosen **uniformly at random** from all empty cells in the circle. The dispersal neighbourhood is a disk (cells satisfying `di² + dj² ≤ r²`), not a square.
+If all conditions pass, the parent chooses a random empty cell in its disk. **Species B's parent dies** at cycle end if it successfully reproduced.
 
-Trees that do not disperse, and trees that were present before the cycle, survive into the next cycle. Seedlings produced during a cycle **cannot** disperse until the following cycle. All decisions in a cycle are based on the landscape at the cycle's start, so the update is **synchronous**: the model reads from one grid and writes to a second, then swaps them.
+### Interspecific competition
+
+When species A and species B both claim the same empty cell in one cycle, a pre-drawn random number resolves the contest: **B wins 60%**, **A wins 40%**. This captures B's invasive advantage at establishment while A accumulates over time because adults persist.
 
 ### Initialization
 
-Before the first cycle, `k` founder clusters are placed on the landscape. For each cluster:
-
-1. A **size** is drawn uniformly from `[minTreesPerCluster, maxTreesPerCluster]` (10–100 in the benchmark run).
-2. A **centre** is drawn uniformly from valid interior grid coordinates (keeping the cluster's local planting box inside the boundaries).
-3. That many trees are placed by rejection sampling within a small box around the centre.
-
-Cluster locations and sizes are therefore random but **reproducible** from the random seed. The parameter `k` is configurable at run time; the benchmark uses `k = 4` for both the serial (`tree2.chpl`) and parallel (`tree_parallel.chpl`) executables.
+For each of `k` clusters, a random size and centre are drawn. Species A and species B each plant that many founders in the same cluster region (rejection sampling in a small box around the centre). Both species therefore share cluster locations but intermix within each patch.
 
 ### Reproducibility
 
-Two independent random-number streams separate founder placement from seed dispersal. In the parallel version, one random value is pre-assigned to every grid cell each cycle so that thread scheduling does not change the dispersal sequence. When multiple trees target the same empty cell, all writes set the cell to occupied; atomic operations make this safe under parallelism.
+Founder placement and dispersal use independent RNG streams. The parallel code pre-draws per-cell random numbers each cycle so thread scheduling does not alter outcomes.
 
 ## 3. Benchmark Design
 
@@ -58,80 +62,68 @@ Runs were submitted to SLURM on Fir (`cpubase_bycore_b1`), allocating 1 node, 32
 | Grid size | 1200 × 1200 |
 | Cycles | 12 |
 | Founder clusters (`k`) | 4 |
-| Trees per cluster | 10–100 (uniform random) |
+| Trees per cluster per species | 10–100 (uniform random) |
 | Dispersal radius | 15 |
+| `reproProbA` / `reproProbB` | 0.35 / 0.85 |
+| `winProbB` (interspecific) | 0.60 |
 | Random seed | 12345 |
 | Repetitions | 3 per configuration |
 | Thread counts | 1, 2, 4, 8, 16, 32 |
 
-The problem size is large enough that parallel overhead is not the dominant cost. Each configuration is timed over three repetitions; reported values are means. Speedup is computed relative to the serial baseline (`tree2.chpl`, 1 thread). Correctness is verified by checking that the final tree count matches the serial result at every thread count.
+Speedup is relative to the serial baseline. Correctness is verified by matching total tree counts (and species breakdown) between serial and parallel runs.
 
 ## 4. Results
 
-**Serial baseline** (`tree2.chpl`): **0.510 s** mean, final tree count **60 075**.
+**Serial baseline** (`tree2.chpl`): **0.636 s** mean, final count **9 195** (A = 8 970, B = 225).
 
 | Threads | Mean time (s) | Speedup | Tree count |
 |--------:|--------------:|--------:|-----------:|
-| 1 | 0.568 | 0.90 | 60 075 |
-| 2 | 0.288 | 1.77 | 60 075 |
-| 4 | 0.185 | 2.76 | 60 075 |
-| 8 | 0.161 | 3.17 | 60 075 |
-| 16 | 0.123 | 4.15 | 60 075 |
-| 32 | 0.076 | 6.71 | 60 075 |
+| 1 | 0.884 | 0.72 | 9 195 |
+| 2 | 0.450 | 1.41 | 9 195 |
+| 4 | 0.237 | 2.68 | 9 195 |
+| 8 | 0.134 | 4.74 | 9 195 |
+| 16 | 0.079 | 8.08 | 9 195 |
+| 32 | 0.052 | 12.27 | 9 195 |
 
-All parallel runs produced identical final tree counts, confirming bitwise reproducibility of the stochastic model across thread counts.
+All parallel runs matched the serial species counts exactly.
 
 ## 5. Discussion
 
-Scattering founders across several randomly sized, randomly located clusters produces a richer colonization pattern than a single seed patch. With `k = 4` and 199 total founders under seed 12345, independent dispersal fronts grow from multiple sites and eventually merge, reaching 60 075 trees by cycle 12.
+Despite species B's faster regeneration and 60% competitive advantage on contested cells, **species A dominates by cycle 12** (8 970 vs 225 trees on the benchmark grid). B's semelparous life history — dying after each successful reproduction — limits standing biomass even though it colonizes aggressively in early cycles. A's persistent adults accumulate and retain territory, illustrating how **biotic life-history traits** can outweigh short-term invasive advantage on a shared landscape.
 
-Parallelism becomes beneficial beyond 1 thread: speedup reaches **6.7×** at 32 threads, reducing runtime from 0.510 s (serial) to 0.076 s.
+This is precisely the kind of process absent from environment-only ENMs, and motivates coupling dispersal and competition modules with abiotic suitability layers in future work.
 
-At 1 thread, the parallel executable is **10% slower** than the serial code (0.568 s vs 0.510 s). This overhead reflects the cost of `forall` scheduling, atomic operations, and parallel reduction infrastructure that are unnecessary at single-thread concurrency.
-
-Scaling improves through 32 threads (0.90× → 6.71×), with particularly strong gains at 16 and 32 threads as the larger population increases the per-cycle work enough to amortize parallel overhead. The per-cell neighbourhood scan remains memory-bound, so further scaling would eventually sub-linear.
+Parallel speedup reaches **12.3×** at 32 threads (0.636 s → 0.052 s). The two-species conflict-resolution phase adds work per cycle but remains highly parallelizable at this grid size.
 
 ## 6. Visualization
 
-To make the spread dynamics visible, we extended the parallel simulator with snapshot export (`tree_viz.chpl`). The approach mirrors the [Chapel Julia-set exercises](https://folio.vastcloud.org/chapel2/chapel-02-variables.html): each grid cell maps to one pixel in a rectangular image, and the landscape is written as a sequence of binary PPM frames.
+`tree_viz.chpl` writes PPM frames coloured by **species** (green vs orange palettes) with hue shading by birth cycle within each species. `tree_visualize.sh` builds PNGs, a two-species legend, and MP4 videos per thread count.
 
-**Rendering.** Empty cells are shown as light soil. Each tree is coloured by its **birth cycle** — founders in dark green, later waves in progressively warmer hues — so successive dispersal fronts are visible. A colour legend is appended to every frame and video. One snapshot is saved at cycle 0 and after each subsequent cycle (13 frames total).
+### Key frames (360 × 360 grid, same seed)
 
-**Visualization parameters.** Frames use a **360 × 360** grid with the same seed, radius, and `k = 4` cluster layout as the benchmark. The smaller landscape raises the occupied fraction to about **42%** by cycle 12 (54 230 trees), making the spread easier to see. Benchmark timing still uses 1200 × 1200.
-
-**Pipeline** (`tree_visualize.sh`). For each thread count (1, 2, 4, 8, 16, 32), the simulator writes PPM frames, ImageMagick converts them to PNG, and ffmpeg assembles a video at 2 frames per second. Because the stochastic model is reproducible across thread counts, every video shows the same landscape evolution; generating one video per thread configuration confirms that parallelism does not alter the result.
-
-### Key frames
-
-Snapshots at cycles 0, 3, 6, 9, and 12 show scattered founder clusters (dark green) and successive dispersal waves in distinct colours. The legend on the right identifies each birth cycle.
-
-| Cycle | Trees |
-|------:|------:|
-| 0 | 199 |
-| 3 | 1 514 |
-| 6 | 8 954 |
-| 9 | 27 386 |
-| 12 | 54 230 |
+| Cycle | Total | Species A | Species B |
+|------:|------:|----------:|----------:|
+| 0 | 630 | 315 | 315 |
+| 3 | 1 035 | 742 | 293 |
+| 6 | 2 068 | 1 796 | 272 |
+| 9 | 4 445 | 4 189 | 256 |
+| 12 | 9 431 | 9 214 | 217 |
 
 <p align="center">
-  <img src="viz/figures/cycle_000.png" width="220" alt="Cycle 0 — four random founder clusters"/>
-  <img src="viz/figures/cycle_003.png" width="220" alt="Cycle 3 — 1 514 trees"/>
-  <img src="viz/figures/cycle_006.png" width="220" alt="Cycle 6 — 8 954 trees"/>
-  <img src="viz/figures/cycle_009.png" width="220" alt="Cycle 9 — 27 386 trees"/>
-  <img src="viz/figures/cycle_012.png" width="220" alt="Cycle 12 — 54 230 trees"/>
+  <img src="viz/figures/cycle_000.png" width="220" alt="Cycle 0 — species A (green) and B (orange) founder clusters"/>
+  <img src="viz/figures/cycle_003.png" width="220" alt="Cycle 3"/>
+  <img src="viz/figures/cycle_006.png" width="220" alt="Cycle 6"/>
+  <img src="viz/figures/cycle_009.png" width="220" alt="Cycle 9"/>
+  <img src="viz/figures/cycle_012.png" width="220" alt="Cycle 12"/>
 </p>
 
-<p align="center"><em>Left to right: cycles 0, 3, 6, 9, 12. Colour = birth cycle (legend on the right of each frame).</em></p>
+<p align="center"><em>Green = species A (persistent). Orange/red = species B (invasive, semelparous).</em></p>
 
 ### Spread animation
 
-The animation below plays all 13 frames (cycle 0 through cycle 12) at 2 frames per second. The same movie was generated independently at each thread count; only the 1-thread version is shown here because the landscapes are identical.
-
 <video controls width="560" src="viz/t01/tree_spread_t01.mp4"></video>
 
-<p align="center"><em>Age-coloured spread on a 360 × 360 grid with legend (<code>viz/t01/tree_spread_t01.mp4</code>).</em></p>
-
-Equivalent videos for other thread configurations (same content, different run):
+<p align="center"><em>Two-species spread on a 360 × 360 grid (<code>viz/t01/tree_spread_t01.mp4</code>).</em></p>
 
 | Threads | Video |
 |--------:|-------|
@@ -146,11 +138,24 @@ Equivalent videos for other thread configurations (same content, different run):
 
 | File | Description |
 |------|-------------|
-| `tree2.chpl` | Serial implementation |
-| `tree_parallel.chpl` | Parallel implementation |
-| `tree_viz.chpl` | Parallel simulator with PPM snapshot output |
+| `tree2.chpl` | Serial two-species implementation |
+| `tree_parallel.chpl` | Parallel two-species implementation |
+| `tree_viz.chpl` | Parallel simulator with species-coloured PPM output |
 | `tree_benchmark.sh` | SLURM benchmark driver |
-| `tree_visualize.sh` | SLURM visualization pipeline (frames, PNGs, videos) |
-| `tree_scaling_45700324.csv` | Scaling summary (CSV) |
-| `viz/figures/` | Key-frame still images and colour legend |
+| `tree_visualize.sh` | SLURM visualization pipeline |
+| `tree_scaling_45702922.csv` | Scaling summary (CSV) |
+| `viz/figures/` | Key-frame stills and species legend |
 | `viz/t*/tree_spread_*.mp4` | Spread animation per thread count |
+
+## 8. Key hyperparameters
+
+| Parameter | Chapel `config` default | Benchmark / viz (`*.sh`) |
+|-----------|-------------------------|--------------------------|
+| `k` | 4 | `--k=4` |
+| `minTreesPerCluster` / `maxTreesPerCluster` | 10 / 100 | same |
+| `reproProbA` / `reproProbB` | 0.35 / 0.85 | same |
+| `winProbB` | 0.60 | same |
+| `radius` | 5 (chpl) / 15 (viz) | `--radius=15` |
+| `rows` / `cols` | 60 (chpl) / 360 (viz) | 1200 (bench) / 360 (viz) |
+
+Change `k`, regeneration rates, or competition odds in the bash `ARGS` / `SIM_ARGS` arrays, or pass `--flag=value` on the command line.

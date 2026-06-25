@@ -1,13 +1,9 @@
 /*
-  Shared-memory parallel tree seed spread on a 2D grid.
+  Shared-memory parallel two-species tree spread (BAM-inspired).
 
-  Parallel concepts used:
-      1. forall data-parallel loops
-      2. a parallel Random stream iterator
-      3. atomic writes for competing seed arrivals
-      4. a parallel reduction for the tree count
-
-  This version is intended for several CPU cores on one Cedar node.
+  Species A: slow regeneration, persistent. Species B: fast regeneration,
+  dies after successful reproduction. Competing claims on one cell resolve
+  60/40 in favour of B by default.
 */
 
 use Time;
@@ -20,30 +16,57 @@ config const k = 4;
 config const minTreesPerCluster = 10;
 config const maxTreesPerCluster = 100;
 config const radius = 5;
+config const reproProbA = 0.35;
+config const reproProbB = 0.85;
+config const winProbB = 0.60;
 config const seed = 12345;
 config const report = true;
+
+const Empty = 0;
+const SpeciesA = 1;
+const SpeciesB = 2;
 
 const Land: domain(2) = {1..rows, 1..cols};
 
 var tree: [Land] int;
-
-/*
-  Different parent trees can select the same target cell concurrently.
-  Atomic elements make those concurrent writes safe.
-*/
 var nextTree: [Land] atomic int;
+var propA: [Land] atomic int;
+var propB: [Land] atomic int;
+var bDie:  [Land] atomic int;
 
 var founderRng = new randomStream(real, seed);
 var spreadRng  = new randomStream(real, seed + 1);
 
 
-// Founder placement is small, so keep it serial.
+proc occupied(val: int): bool {
+  return val != Empty;
+}
+
+
+proc plantCluster(ref grid: [Land] int, species: int,
+                  clusterR: int, clusterC: int, clusterSize: int,
+                  halfBox: int) {
+  var planted = 0;
+
+  while planted < clusterSize {
+    const i = clusterR - halfBox +
+              (founderRng.next() * (2 * halfBox + 1)): int;
+    const j = clusterC - halfBox +
+              (founderRng.next() * (2 * halfBox + 1)): int;
+
+    if Land.contains(i, j) && grid[i, j] == Empty {
+      grid[i, j] = species;
+      planted += 1;
+    }
+  }
+}
+
+
 const halfBox = max(1, radius / 2);
 const minR = halfBox + 1;
 const maxR = rows - halfBox;
 const minC = halfBox + 1;
 const maxC = cols - halfBox;
-var initialTrees = 0;
 
 for cluster in 0..<k {
   const clusterSize = minTreesPerCluster +
@@ -53,87 +76,77 @@ for cluster in 0..<k {
   const clusterC = minC +
     (founderRng.next() * (maxC - minC + 1)): int;
 
-  var clusterPlanted = 0;
-
-  while clusterPlanted < clusterSize {
-    const i = clusterR - halfBox +
-              (founderRng.next() * (2 * halfBox + 1)): int;
-    const j = clusterC - halfBox +
-              (founderRng.next() * (2 * halfBox + 1)): int;
-
-    if Land.contains(i, j) && tree[i, j] == 0 {
-      tree[i, j] = 1;
-      clusterPlanted += 1;
-    }
-  }
-
-  initialTrees += clusterPlanted;
+  plantCluster(tree, SpeciesA, clusterR, clusterC, clusterSize, halfBox);
+  plantCluster(tree, SpeciesB, clusterR, clusterC, clusterSize, halfBox);
 }
 
 
-// Main simulation.
-var treeCount = initialTrees;
 var timer: stopwatch;
 timer.start();
 
 for cycle in 1..steps {
-
-  // Existing trees persist. Each iteration writes a different element.
   forall idx in Land do
     nextTree[idx].write(tree[idx]);
 
-  /*
-    rng.next(Land) maps a reproducible random value to every index in Land.
-    Unlike calling rng.next() inside forall, this parallel iterator is safe.
-  */
-  forall (idx, randomValue) in zip(Land, spreadRng.next(Land)) {
+  forall idx in Land {
+    propA[idx].write(0);
+    propB[idx].write(0);
+    bDie[idx].write(0);
+  }
+
+  const reproRolls: [Land] real = spreadRng.next(Land);
+  const targetRolls: [Land] real = spreadRng.next(Land);
+  const competeRolls: [Land] real = spreadRng.next(Land);
+
+  forall (idx, reproRoll, targetRoll) in zip(Land, reproRolls, targetRolls) {
     const (i, j) = idx;
+    const species = tree[i, j];
 
-    if tree[i, j] == 1 {
-      var otherTree = false;
-      var emptyCount = 0;
+    if !occupied(species) then continue;
 
-      // These variables are private to this forall iteration.
-      for di in -radius..radius {
+    var otherTree = false;
+    var emptyCount = 0;
+
+    for di in -radius..radius {
+      for dj in -radius..radius {
+        if di*di + dj*dj <= radius*radius {
+          const ni = i + di;
+          const nj = j + dj;
+
+          if Land.contains(ni, nj) {
+            if (di != 0 || dj != 0) && occupied(tree[ni, nj]) then
+              otherTree = true;
+
+            if tree[ni, nj] == Empty then
+              emptyCount += 1;
+          }
+        }
+      }
+    }
+
+    const reproProb = if species == SpeciesA then reproProbA else reproProbB;
+
+    if otherTree && emptyCount > 0 && reproRoll < reproProb {
+      const target = min((targetRoll * emptyCount): int, emptyCount - 1);
+      var seen = 0;
+
+      label place for di in -radius..radius {
         for dj in -radius..radius {
           if di*di + dj*dj <= radius*radius {
             const ni = i + di;
             const nj = j + dj;
 
-            if Land.contains(ni, nj) {
-              if (di != 0 || dj != 0) && tree[ni, nj] == 1 then
-                otherTree = true;
-
-              if tree[ni, nj] == 0 then
-                emptyCount += 1;
-            }
-          }
-        }
-      }
-
-      if otherTree && emptyCount > 0 {
-        const target = min((randomValue * emptyCount): int,
-                           emptyCount - 1);
-        var seen = 0;
-
-        label place for di in -radius..radius {
-          for dj in -radius..radius {
-            if di*di + dj*dj <= radius*radius {
-              const ni = i + di;
-              const nj = j + dj;
-
-              if Land.contains(ni, nj) && tree[ni, nj] == 0 {
-                if seen == target {
-                  /*
-                    Several tasks may write 1 to the same cell.
-                    Atomic write prevents a data race.
-                  */
-                  nextTree[ni, nj].write(1);
-                  break place;
+            if Land.contains(ni, nj) && tree[ni, nj] == Empty {
+              if seen == target {
+                if species == SpeciesA then
+                  propA[ni, nj].write(1);
+                else {
+                  propB[ni, nj].write(1);
+                  bDie[i, j].write(1);
                 }
-
-                seen += 1;
+                break place;
               }
+              seen += 1;
             }
           }
         }
@@ -141,18 +154,48 @@ for cycle in 1..steps {
     }
   }
 
-  // forall ends with a barrier, so all seed placements are complete here.
+  forall idx in Land {
+    if tree[idx] != Empty then continue;
+
+    if propA[idx].read() > 0 && propB[idx].read() > 0 {
+      if competeRolls[idx] < winProbB then
+        nextTree[idx].write(SpeciesB);
+      else
+        nextTree[idx].write(SpeciesA);
+    } else if propB[idx].read() > 0 then
+      nextTree[idx].write(SpeciesB);
+    else if propA[idx].read() > 0 then
+      nextTree[idx].write(SpeciesA);
+  }
+
+  forall idx in Land do
+    if bDie[idx].read() > 0 then
+      nextTree[idx].write(Empty);
+
   forall idx in Land do
     tree[idx] = nextTree[idx].read();
 
-  // Chapel parallel reduction.
-  treeCount = (+ reduce tree);
-
-  if report then
-    writeln("cycle ", cycle, ": ", treeCount, " trees");
+  if report {
+    var countA = 0;
+    var countB = 0;
+    for idx in Land {
+      if tree[idx] == SpeciesA then countA += 1;
+      else if tree[idx] == SpeciesB then countB += 1;
+    }
+    writeln("cycle ", cycle, ": ", countA + countB,
+            " trees (A=", countA, ", B=", countB, ")");
+  }
 }
 
 timer.stop();
 
-writeln("Final tree count: ", treeCount);
+var finalA = 0;
+var finalB = 0;
+for idx in Land {
+  if tree[idx] == SpeciesA then finalA += 1;
+  else if tree[idx] == SpeciesB then finalB += 1;
+}
+
+writeln("Final tree count: ", finalA + finalB,
+        " (A=", finalA, ", B=", finalB, ")");
 writeln("Simulation finished in ", timer.elapsed(), " seconds");
