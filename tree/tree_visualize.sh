@@ -128,6 +128,11 @@ done
 
 cp "${LEGEND}" "${VIZ_ROOT}/figures/legend.png"
 
+ffmpeg -y -loglevel error -framerate "${FPS}" \
+  -i "${ref_png_dir}/cycle_%03d.png" \
+  -vf "scale=400:-1:flags=lanczos" \
+  -loop 0 "${VIZ_ROOT}/figures/tree_spread.gif"
+
 echo
 echo "Done."
 echo "  Key frames : ${VIZ_ROOT}/figures/"

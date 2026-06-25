@@ -109,21 +109,19 @@ Parallel speedup reaches **12.3×** at 32 threads (0.636 s → 0.052 s). The two
 | 9 | 4 445 | 4 189 | 256 |
 | 12 | 9 431 | 9 214 | 217 |
 
-<p align="center">
-  <img src="viz/figures/cycle_000.png" width="220" alt="Cycle 0 — species A (green) and B (orange) founder clusters"/>
-  <img src="viz/figures/cycle_003.png" width="220" alt="Cycle 3"/>
-  <img src="viz/figures/cycle_006.png" width="220" alt="Cycle 6"/>
-  <img src="viz/figures/cycle_009.png" width="220" alt="Cycle 9"/>
-  <img src="viz/figures/cycle_012.png" width="220" alt="Cycle 12"/>
-</p>
+| Cycle 0 | Cycle 3 | Cycle 6 |
+|:-------:|:-------:|:-------:|
+| ![Cycle 0 — founders](viz/figures/cycle_000.png) | ![Cycle 3](viz/figures/cycle_003.png) | ![Cycle 6](viz/figures/cycle_006.png) |
+| Cycle 9 | Cycle 12 | Legend |
+| ![Cycle 9](viz/figures/cycle_009.png) | ![Cycle 12](viz/figures/cycle_012.png) | ![Species legend](viz/figures/legend.png) |
 
-<p align="center"><em>Green = species A (persistent). Orange/red = species B (invasive, semelparous).</em></p>
+*Green = species A (persistent). Orange/red = species B (invasive, semelparous).*
 
 ### Spread animation
 
-<video controls width="560" src="viz/t01/tree_spread_t01.mp4"></video>
+![Two-species spread animation](viz/figures/tree_spread.gif)
 
-<p align="center"><em>Two-species spread on a 360 × 360 grid (<code>viz/t01/tree_spread_t01.mp4</code>).</em></p>
+*Animated GIF (2 fps) from the 1-thread run. Full-quality video: [tree_spread_t01.mp4](viz/t01/tree_spread_t01.mp4).*
 
 | Threads | Video |
 |--------:|-------|
@@ -144,7 +142,7 @@ Parallel speedup reaches **12.3×** at 32 threads (0.636 s → 0.052 s). The two
 | `tree_benchmark.sh` | SLURM benchmark driver |
 | `tree_visualize.sh` | SLURM visualization pipeline |
 | `tree_scaling_45702922.csv` | Scaling summary (CSV) |
-| `viz/figures/` | Key-frame stills and species legend |
+| `viz/figures/` | Key-frame stills, legend, and spread GIF |
 | `viz/t*/tree_spread_*.mp4` | Spread animation per thread count |
 
 ## 8. Key hyperparameters
