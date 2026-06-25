@@ -37,7 +37,7 @@ use Random;
 config const rows = 60;
 config const cols = 60;
 config const steps = 2;
-config const k = 3;
+config const k = 4;
 config const minTreesPerCluster = 10;
 config const maxTreesPerCluster = 100;
 config const radius = 5;

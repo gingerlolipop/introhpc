@@ -14,7 +14,7 @@ use IO;
 config const rows = 360;
 config const cols = 360;
 config const steps = 12;
-config const k = 5;
+config const k = 4;
 config const minTreesPerCluster = 10;
 config const maxTreesPerCluster = 100;
 config const radius = 15;

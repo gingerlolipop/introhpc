@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-We simulate how trees colonize a two-dimensional landscape over discrete time steps. The landscape is a rectangular grid: each cell is either empty or occupied by one tree. Starting from **k randomly placed founder clusters** of varying size, trees spread outward cycle by cycle according to a simple dispersal rule. Over 12 cycles on a 1200 × 1200 grid with `k = 5`, the population grows from 243 founders to 66 954 trees.
+We simulate how trees colonize a two-dimensional landscape over discrete time steps. The landscape is a rectangular grid: each cell is either empty or occupied by one tree. Starting from **k randomly placed founder clusters** of varying size, trees spread outward cycle by cycle according to a simple dispersal rule. Over 12 cycles on a 1200 × 1200 grid with `k = 4`, the population grows from 199 founders to 60 075 trees.
 
 The computational goal is to measure how much faster this simulation runs when the grid update is parallelized across CPU cores. Two Chapel programs implement the same model:
 
@@ -43,7 +43,7 @@ Before the first cycle, `k` founder clusters are placed on the landscape. For ea
 2. A **centre** is drawn uniformly from valid interior grid coordinates (keeping the cluster's local planting box inside the boundaries).
 3. That many trees are placed by rejection sampling within a small box around the centre.
 
-Cluster locations and sizes are therefore random but **reproducible** from the random seed. The parameter `k` is configurable at run time; the benchmark uses `k = 5`.
+Cluster locations and sizes are therefore random but **reproducible** from the random seed. The parameter `k` is configurable at run time; the benchmark uses `k = 4` for both the serial (`tree2.chpl`) and parallel (`tree_parallel.chpl`) executables.
 
 ### Reproducibility
 
@@ -57,7 +57,7 @@ Runs were submitted to SLURM on Fir (`cpubase_bycore_b1`), allocating 1 node, 32
 |-----------|-------|
 | Grid size | 1200 × 1200 |
 | Cycles | 12 |
-| Founder clusters (`k`) | 5 |
+| Founder clusters (`k`) | 4 |
 | Trees per cluster | 10–100 (uniform random) |
 | Dispersal radius | 15 |
 | Random seed | 12345 |
@@ -68,28 +68,28 @@ The problem size is large enough that parallel overhead is not the dominant cost
 
 ## 4. Results
 
-**Serial baseline** (`tree2.chpl`): **0.540 s** mean, final tree count **66 954**.
+**Serial baseline** (`tree2.chpl`): **0.510 s** mean, final tree count **60 075**.
 
 | Threads | Mean time (s) | Speedup | Tree count |
 |--------:|--------------:|--------:|-----------:|
-| 1 | 0.595 | 0.91 | 66 954 |
-| 2 | 0.324 | 1.67 | 66 954 |
-| 4 | 0.224 | 2.41 | 66 954 |
-| 8 | 0.202 | 2.67 | 66 954 |
-| 16 | 0.123 | 4.38 | 66 954 |
-| 32 | 0.075 | 7.24 | 66 954 |
+| 1 | 0.568 | 0.90 | 60 075 |
+| 2 | 0.288 | 1.77 | 60 075 |
+| 4 | 0.185 | 2.76 | 60 075 |
+| 8 | 0.161 | 3.17 | 60 075 |
+| 16 | 0.123 | 4.15 | 60 075 |
+| 32 | 0.076 | 6.71 | 60 075 |
 
 All parallel runs produced identical final tree counts, confirming bitwise reproducibility of the stochastic model across thread counts.
 
 ## 5. Discussion
 
-Scattering founders across several randomly sized, randomly located clusters produces a richer colonization pattern than a single seed patch. With `k = 5` and 243 total founders under seed 12345, independent dispersal fronts grow from multiple sites and eventually merge, reaching 66 954 trees by cycle 12.
+Scattering founders across several randomly sized, randomly located clusters produces a richer colonization pattern than a single seed patch. With `k = 4` and 199 total founders under seed 12345, independent dispersal fronts grow from multiple sites and eventually merge, reaching 60 075 trees by cycle 12.
 
-Parallelism becomes beneficial beyond 1 thread: speedup reaches **7.2×** at 32 threads, reducing runtime from 0.540 s (serial) to 0.075 s.
+Parallelism becomes beneficial beyond 1 thread: speedup reaches **6.7×** at 32 threads, reducing runtime from 0.510 s (serial) to 0.076 s.
 
-At 1 thread, the parallel executable is **10% slower** than the serial code (0.595 s vs 0.540 s). This overhead reflects the cost of `forall` scheduling, atomic operations, and parallel reduction infrastructure that are unnecessary at single-thread concurrency.
+At 1 thread, the parallel executable is **10% slower** than the serial code (0.568 s vs 0.510 s). This overhead reflects the cost of `forall` scheduling, atomic operations, and parallel reduction infrastructure that are unnecessary at single-thread concurrency.
 
-Scaling improves through 32 threads (0.91× → 7.24×), with particularly strong gains at 16 and 32 threads as the larger population increases the per-cycle work enough to amortize parallel overhead. The per-cell neighbourhood scan remains memory-bound, so further scaling would eventually sub-linear.
+Scaling improves through 32 threads (0.90× → 6.71×), with particularly strong gains at 16 and 32 threads as the larger population increases the per-cycle work enough to amortize parallel overhead. The per-cell neighbourhood scan remains memory-bound, so further scaling would eventually sub-linear.
 
 ## 6. Visualization
 
@@ -97,7 +97,7 @@ To make the spread dynamics visible, we extended the parallel simulator with sna
 
 **Rendering.** Empty cells are shown as light soil. Each tree is coloured by its **birth cycle** — founders in dark green, later waves in progressively warmer hues — so successive dispersal fronts are visible. A colour legend is appended to every frame and video. One snapshot is saved at cycle 0 and after each subsequent cycle (13 frames total).
 
-**Visualization parameters.** Frames use a **360 × 360** grid with the same seed, radius, and `k = 5` cluster layout as the benchmark. The smaller landscape raises the occupied fraction to about **43%** by cycle 12 (56 158 trees), making the spread easier to see. Benchmark timing still uses 1200 × 1200.
+**Visualization parameters.** Frames use a **360 × 360** grid with the same seed, radius, and `k = 4` cluster layout as the benchmark. The smaller landscape raises the occupied fraction to about **42%** by cycle 12 (54 230 trees), making the spread easier to see. Benchmark timing still uses 1200 × 1200.
 
 **Pipeline** (`tree_visualize.sh`). For each thread count (1, 2, 4, 8, 16, 32), the simulator writes PPM frames, ImageMagick converts them to PNG, and ffmpeg assembles a video at 2 frames per second. Because the stochastic model is reproducible across thread counts, every video shows the same landscape evolution; generating one video per thread configuration confirms that parallelism does not alter the result.
 
@@ -107,18 +107,18 @@ Snapshots at cycles 0, 3, 6, 9, and 12 show scattered founder clusters (dark gre
 
 | Cycle | Trees |
 |------:|------:|
-| 0 | 243 |
-| 3 | 1 817 |
-| 6 | 10 032 |
-| 9 | 29 271 |
-| 12 | 56 158 |
+| 0 | 199 |
+| 3 | 1 514 |
+| 6 | 8 954 |
+| 9 | 27 386 |
+| 12 | 54 230 |
 
 <p align="center">
-  <img src="viz/figures/cycle_000.png" width="220" alt="Cycle 0 — five random founder clusters"/>
-  <img src="viz/figures/cycle_003.png" width="220" alt="Cycle 3 — 1 817 trees"/>
-  <img src="viz/figures/cycle_006.png" width="220" alt="Cycle 6 — 10 032 trees"/>
-  <img src="viz/figures/cycle_009.png" width="220" alt="Cycle 9 — 29 271 trees"/>
-  <img src="viz/figures/cycle_012.png" width="220" alt="Cycle 12 — 56 158 trees"/>
+  <img src="viz/figures/cycle_000.png" width="220" alt="Cycle 0 — four random founder clusters"/>
+  <img src="viz/figures/cycle_003.png" width="220" alt="Cycle 3 — 1 514 trees"/>
+  <img src="viz/figures/cycle_006.png" width="220" alt="Cycle 6 — 8 954 trees"/>
+  <img src="viz/figures/cycle_009.png" width="220" alt="Cycle 9 — 27 386 trees"/>
+  <img src="viz/figures/cycle_012.png" width="220" alt="Cycle 12 — 54 230 trees"/>
 </p>
 
 <p align="center"><em>Left to right: cycles 0, 3, 6, 9, 12. Colour = birth cycle (legend on the right of each frame).</em></p>
@@ -151,6 +151,6 @@ Equivalent videos for other thread configurations (same content, different run):
 | `tree_viz.chpl` | Parallel simulator with PPM snapshot output |
 | `tree_benchmark.sh` | SLURM benchmark driver |
 | `tree_visualize.sh` | SLURM visualization pipeline (frames, PNGs, videos) |
-| `tree_scaling_45700052.csv` | Scaling summary (CSV) |
+| `tree_scaling_45700324.csv` | Scaling summary (CSV) |
 | `viz/figures/` | Key-frame still images and colour legend |
 | `viz/t*/tree_spread_*.mp4` | Spread animation per thread count |
