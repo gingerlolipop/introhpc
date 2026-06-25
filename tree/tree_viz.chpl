@@ -75,6 +75,32 @@ proc encode(species: int, birthCycle: int): int {
 }
 
 
+proc nthEmptyInDisk(treeGrid: [Land] int, ci: int, cj: int, targetIndex: int,
+                    skipI: int = -1, skipJ: int = -1): (int, int, bool) {
+  var seen = 0;
+
+  for di in -radius..radius {
+    for dj in -radius..radius {
+      if di*di + dj*dj <= radius*radius {
+        const ni = ci + di;
+        const nj = cj + dj;
+
+        if Land.contains(ni, nj) && treeGrid[ni, nj] == Empty {
+          if ni == skipI && nj == skipJ then continue;
+
+          if seen == targetIndex then
+            return (ni, nj, true);
+
+          seen += 1;
+        }
+      }
+    }
+  }
+
+  return (-1, -1, false);
+}
+
+
 proc cycleLabel(cycle: int): string {
   var digits = cycle:string;
   while digits.size < 3 do
@@ -180,9 +206,11 @@ for cycle in 1..steps {
 
   const reproRolls: [Land] real = spreadRng.next(Land);
   const targetRolls: [Land] real = spreadRng.next(Land);
+  const secondTargetRolls: [Land] real = spreadRng.next(Land);
   const competeRolls: [Land] real = spreadRng.next(Land);
 
-  forall (idx, reproRoll, targetRoll) in zip(Land, reproRolls, targetRolls) {
+  forall (idx, reproRoll, targetRoll, secondTargetRoll) in
+      zip(Land, reproRolls, targetRolls, secondTargetRolls) {
     const (i, j) = idx;
     const val = tree[i, j];
 
@@ -190,6 +218,7 @@ for cycle in 1..steps {
 
     const species = speciesOf(val);
     var otherTree = false;
+    var otherB = false;
     var emptyCount = 0;
 
     for di in -radius..radius {
@@ -199,8 +228,11 @@ for cycle in 1..steps {
           const nj = j + dj;
 
           if Land.contains(ni, nj) {
-            if (di != 0 || dj != 0) && occupied(tree[ni, nj]) then
+            if (di != 0 || dj != 0) && occupied(tree[ni, nj]) {
               otherTree = true;
+              if speciesOf(tree[ni, nj]) == SpeciesB then
+                otherB = true;
+            }
 
             if tree[ni, nj] == Empty then
               emptyCount += 1;
@@ -212,27 +244,23 @@ for cycle in 1..steps {
     const reproProb = if species == SpeciesA then reproProbA else reproProbB;
 
     if otherTree && emptyCount > 0 && reproRoll < reproProb {
-      const target = min((targetRoll * emptyCount): int, emptyCount - 1);
-      var seen = 0;
+      const target1 = min((targetRoll * emptyCount): int, emptyCount - 1);
+      const (t1i, t1j, ok1) = nthEmptyInDisk(tree, i, j, target1);
 
-      label place for di in -radius..radius {
-        for dj in -radius..radius {
-          if di*di + dj*dj <= radius*radius {
-            const ni = i + di;
-            const nj = j + dj;
+      if ok1 {
+        if species == SpeciesA then
+          propA[t1i, t1j].write(1);
+        else {
+          propB[t1i, t1j].write(1);
+          bDie[i, j].write(1);
 
-            if Land.contains(ni, nj) && tree[ni, nj] == Empty {
-              if seen == target {
-                if species == SpeciesA then
-                  propA[ni, nj].write(1);
-                else {
-                  propB[ni, nj].write(1);
-                  bDie[i, j].write(1);
-                }
-                break place;
-              }
-              seen += 1;
-            }
+          if otherB && emptyCount >= 2 {
+            const remain = emptyCount - 1;
+            const target2 = min((secondTargetRoll * remain): int, remain - 1);
+            const (t2i, t2j, ok2) = nthEmptyInDisk(tree, i, j, target2, t1i, t1j);
+
+            if ok2 then
+              propB[t2i, t2j].write(1);
           }
         }
       }

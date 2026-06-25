@@ -8,7 +8,7 @@ Both species start from the **same founder-cluster layout** (`k = 4` random clus
 
 | | Species A | Species B |
 |---|-----------|-----------|
-| Regeneration | Slower (`reproProbA = 0.35`) | Faster (`reproProbB = 0.85`) |
+| Regeneration | Slower (`reproProbA = 0.35`) | Faster (`reproProbB = 0.85`); **two seeds** when another B is nearby |
 | Lifespan | Long-lived; never dies | Dies after successful reproduction |
 | Competition | 40% chance when both claim a cell | 60% chance (more invasive) |
 | Role | Persistent resident | Fast colonizer |
@@ -39,11 +39,11 @@ Time advances in synchronous **cycles**. At the start of each cycle, every tree 
 2. **Room to land** — at least one empty cell in the same disk.
 3. **Regeneration draw** — species A reproduces with probability 0.35; species B with 0.85.
 
-If all conditions pass, the parent chooses a random empty cell in its disk. **Species B's parent dies** at cycle end if it successfully reproduced.
+If all conditions pass, the parent chooses one or more random empty cells in its disk. **Species B** places **two seeds** when at least one other B tree lies in the same disk (B–B facilitation); otherwise it places one. **Species B's parent dies** at cycle end if it successfully reproduced.
 
 ### Interspecific competition
 
-When species A and species B both claim the same empty cell in one cycle, a pre-drawn random number resolves the contest: **B wins 60%**, **A wins 40%**. This captures B's invasive advantage at establishment while A accumulates over time because adults persist.
+When species A and species B both claim the same empty cell in one cycle, a pre-drawn random number resolves the contest: **B wins 60%**, **A wins 40%**.
 
 ### Initialization
 
@@ -74,26 +74,24 @@ Speedup is relative to the serial baseline. Correctness is verified by matching 
 
 ## 4. Results
 
-**Serial baseline** (`tree2.chpl`): **0.636 s** mean, final count **9 195** (A = 8 970, B = 225).
+**Serial baseline** (`tree2.chpl`): **1.365 s** mean, final count **37 582** (A = 3 946, B = 33 636).
 
 | Threads | Mean time (s) | Speedup | Tree count |
 |--------:|--------------:|--------:|-----------:|
-| 1 | 0.884 | 0.72 | 9 195 |
-| 2 | 0.450 | 1.41 | 9 195 |
-| 4 | 0.237 | 2.68 | 9 195 |
-| 8 | 0.134 | 4.74 | 9 195 |
-| 16 | 0.079 | 8.08 | 9 195 |
-| 32 | 0.052 | 12.27 | 9 195 |
+| 1 | 1.636 | 0.83 | 37 582 |
+| 2 | 0.848 | 1.61 | 37 582 |
+| 4 | 0.600 | 2.28 | 37 582 |
+| 8 | 0.469 | 2.91 | 37 582 |
+| 16 | 0.291 | 4.69 | 37 582 |
+| 32 | 0.204 | 6.70 | 37 582 |
 
 All parallel runs matched the serial species counts exactly.
 
 ## 5. Discussion
 
-Despite species B's faster regeneration and 60% competitive advantage on contested cells, **species A dominates by cycle 12** (8 970 vs 225 trees on the benchmark grid). B's semelparous life history — dying after each successful reproduction — limits standing biomass even though it colonizes aggressively in early cycles. A's persistent adults accumulate and retain territory, illustrating how **biotic life-history traits** can outweigh short-term invasive advantage on a shared landscape.
+With B–B double seeding added to its faster regeneration and 60% competitive edge, **species B dominates by cycle 12** (33 636 vs 3 946 trees on the benchmark grid). Dense B patches reinforce one another through paired reproduction even though individual B adults die after each reproductive event. Species A persists only in refugia where B colonization is slower to arrive.
 
-This is precisely the kind of process absent from environment-only ENMs, and motivates coupling dispersal and competition modules with abiotic suitability layers in future work.
-
-Parallel speedup reaches **12.3×** at 32 threads (0.636 s → 0.052 s). The two-species conflict-resolution phase adds work per cycle but remains highly parallelizable at this grid size.
+Parallel speedup reaches **6.7×** at 32 threads (1.365 s → 0.204 s). The larger population and extra proposal logic increase per-cycle work compared with the single-species baseline.
 
 ## 6. Visualization
 
@@ -104,10 +102,10 @@ Parallel speedup reaches **12.3×** at 32 threads (0.636 s → 0.052 s). The two
 | Cycle | Total | Species A | Species B |
 |------:|------:|----------:|----------:|
 | 0 | 630 | 315 | 315 |
-| 3 | 1 035 | 742 | 293 |
-| 6 | 2 068 | 1 796 | 272 |
-| 9 | 4 445 | 4 189 | 256 |
-| 12 | 9 431 | 9 214 | 217 |
+| 3 | 2 270 | 701 | 1 569 |
+| 6 | 7 290 | 1 371 | 5 919 |
+| 9 | 15 470 | 2 364 | 13 106 |
+| 12 | 25 267 | 3 784 | 21 483 |
 
 | Cycle 0 | Cycle 3 | Cycle 6 |
 |:-------:|:-------:|:-------:|
@@ -141,7 +139,7 @@ Parallel speedup reaches **12.3×** at 32 threads (0.636 s → 0.052 s). The two
 | `tree_viz.chpl` | Parallel simulator with species-coloured PPM output |
 | `tree_benchmark.sh` | SLURM benchmark driver |
 | `tree_visualize.sh` | SLURM visualization pipeline |
-| `tree_scaling_45702922.csv` | Scaling summary (CSV) |
+| `tree_scaling_45703330.csv` | Scaling summary (CSV) |
 | `viz/figures/` | Key-frame stills, legend, and spread GIF |
 | `viz/t*/tree_spread_*.mp4` | Spread animation per thread count |
 

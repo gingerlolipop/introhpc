@@ -8,6 +8,8 @@
 
   Both species share the same founder-cluster layout. When A and B claim the
   same empty cell in one cycle, B wins with probability winProbB (default 60%).
+  When a B tree reproduces with another B in its dispersal disk, it places two
+  seeds instead of one.
 */
 
 use Time;
@@ -41,6 +43,41 @@ var spreadRng  = new randomStream(real, seed + 1);
 
 proc occupied(val: int): bool {
   return val != Empty;
+}
+
+
+// Return the (i,j) of the targetIndex-th empty cell in the disk around (ci,cj),
+// optionally skipping one cell (used to pick a second distinct landing site).
+proc nthEmptyInDisk(treeGrid: [Land] int, ci: int, cj: int, targetIndex: int,
+                    skipI: int = -1, skipJ: int = -1): (int, int, bool) {
+  var seen = 0;
+
+  for di in -radius..radius {
+    for dj in -radius..radius {
+      if di*di + dj*dj <= radius*radius {
+        const ni = ci + di;
+        const nj = cj + dj;
+
+        if Land.contains(ni, nj) && treeGrid[ni, nj] == Empty {
+          if ni == skipI && nj == skipJ then continue;
+
+          if seen == targetIndex then
+            return (ni, nj, true);
+
+          seen += 1;
+        }
+      }
+    }
+  }
+
+  return (-1, -1, false);
+}
+
+
+proc claimB(ref propB: [Land] bool, ref bDie: [Land] bool,
+            pi: int, pj: int, ni: int, nj: int) {
+  propB[ni, nj] = true;
+  bDie[pi, pj] = true;
 }
 
 
@@ -101,15 +138,18 @@ for cycle in 1..steps {
 
   const reproRolls: [Land] real = spreadRng.next(Land);
   const targetRolls: [Land] real = spreadRng.next(Land);
+  const secondTargetRolls: [Land] real = spreadRng.next(Land);
   const competeRolls: [Land] real = spreadRng.next(Land);
 
-  for (idx, reproRoll, targetRoll) in zip(Land, reproRolls, targetRolls) {
+  for (idx, reproRoll, targetRoll, secondTargetRoll) in
+      zip(Land, reproRolls, targetRolls, secondTargetRolls) {
     const (i, j) = idx;
     const species = tree[i, j];
 
     if !occupied(species) then continue;
 
     var otherTree = false;
+    var otherB = false;
     var emptyCount = 0;
 
     for di in -radius..radius {
@@ -119,8 +159,11 @@ for cycle in 1..steps {
           const nj = j + dj;
 
           if Land.contains(ni, nj) {
-            if (di != 0 || dj != 0) && occupied(tree[ni, nj]) then
+            if (di != 0 || dj != 0) && occupied(tree[ni, nj]) {
               otherTree = true;
+              if tree[ni, nj] == SpeciesB then
+                otherB = true;
+            }
 
             if tree[ni, nj] == Empty then
               emptyCount += 1;
@@ -132,27 +175,22 @@ for cycle in 1..steps {
     const reproProb = if species == SpeciesA then reproProbA else reproProbB;
 
     if otherTree && emptyCount > 0 && reproRoll < reproProb {
-      const target = min((targetRoll * emptyCount): int, emptyCount - 1);
-      var seen = 0;
+      const target1 = min((targetRoll * emptyCount): int, emptyCount - 1);
+      const (t1i, t1j, ok1) = nthEmptyInDisk(tree, i, j, target1);
 
-      label place for di in -radius..radius {
-        for dj in -radius..radius {
-          if di*di + dj*dj <= radius*radius {
-            const ni = i + di;
-            const nj = j + dj;
+      if ok1 {
+        if species == SpeciesA then
+          propA[t1i, t1j] = true;
+        else {
+          claimB(propB, bDie, i, j, t1i, t1j);
 
-            if Land.contains(ni, nj) && tree[ni, nj] == Empty {
-              if seen == target {
-                if species == SpeciesA then
-                  propA[ni, nj] = true;
-                else {
-                  propB[ni, nj] = true;
-                  bDie[i, j] = true;
-                }
-                break place;
-              }
-              seen += 1;
-            }
+          if otherB && emptyCount >= 2 {
+            const remain = emptyCount - 1;
+            const target2 = min((secondTargetRoll * remain): int, remain - 1);
+            const (t2i, t2j, ok2) = nthEmptyInDisk(tree, i, j, target2, t1i, t1j);
+
+            if ok2 then
+              propB[t2i, t2j] = true;
           }
         }
       }
