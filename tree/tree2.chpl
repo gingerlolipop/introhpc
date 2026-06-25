@@ -8,8 +8,8 @@
       0 = empty
       1 = tree
 
-  The simulation starts with a small cluster of founder trees near the center
-  of the landscape. At each cycle, every existing tree is checked.
+  The simulation starts with one or more small clusters of founder trees on the
+  landscape. At each cycle, every existing tree is checked.
 
   Reproduction rule:
 
@@ -37,7 +37,9 @@ use Random;
 config const rows = 60;
 config const cols = 60;
 config const steps = 2;
-config const initialTrees = 10;
+config const treesPerCluster = 10;
+config const numClusters = 1;
+config const clusterSeparation = 20;
 config const radius = 5;
 config const seed = 12345;
 config const report = true;
@@ -56,25 +58,33 @@ var founderRng = new randomStream(real, seed);
 var spreadRng  = new randomStream(real, seed + 1);
 
 
-// Place founder trees near the centre.
+// Place founder trees in numClusters clusters, each centred on a point along
+// the column axis and separated by clusterSeparation cells.
 const cr = rows / 2;
 const cc = cols / 2;
 const halfBox = max(1, radius / 2);
+const initialTrees = treesPerCluster * numClusters;
 
-var planted = 0;
+for cluster in 0..<numClusters {
+  const offset = ((cluster * 2 - (numClusters - 1)):real / 2.0)
+                 * clusterSeparation;
+  const clusterR = cr;
+  const clusterC = (cc + offset): int;
 
-// Rejection sampling: draw random cells until we have initialTrees distinct
-// empty sites. Overlapping draws are skipped (tree[i,j] == 0 check).
-while planted < initialTrees {
-  // founderRng.next() is in [0,1); scale to integer offset inside the box.
-  const i = cr - halfBox +
-            (founderRng.next() * (2 * halfBox + 1)): int;
-  const j = cc - halfBox +
-            (founderRng.next() * (2 * halfBox + 1)): int;
+  var clusterPlanted = 0;
 
-  if Land.contains(i, j) && tree[i, j] == 0 {
-    tree[i, j] = 1;
-    planted += 1;
+  // Rejection sampling: draw random cells until treesPerCluster distinct empty
+  // sites are filled in this cluster. Overlapping draws are skipped.
+  while clusterPlanted < treesPerCluster {
+    const i = clusterR - halfBox +
+              (founderRng.next() * (2 * halfBox + 1)): int;
+    const j = clusterC - halfBox +
+              (founderRng.next() * (2 * halfBox + 1)): int;
+
+    if Land.contains(i, j) && tree[i, j] == 0 {
+      tree[i, j] = 1;
+      clusterPlanted += 1;
+    }
   }
 }
 

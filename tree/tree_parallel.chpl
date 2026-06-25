@@ -16,7 +16,9 @@ use Random;
 config const rows = 60;
 config const cols = 60;
 config const steps = 2;
-config const initialTrees = 10;
+config const treesPerCluster = 10;
+config const numClusters = 1;
+config const clusterSeparation = 20;
 config const radius = 5;
 config const seed = 12345;
 config const report = true;
@@ -39,18 +41,26 @@ var spreadRng  = new randomStream(real, seed + 1);
 const cr = rows / 2;
 const cc = cols / 2;
 const halfBox = max(1, radius / 2);
+const initialTrees = treesPerCluster * numClusters;
 
-var planted = 0;
+for cluster in 0..<numClusters {
+  const offset = ((cluster * 2 - (numClusters - 1)):real / 2.0)
+                 * clusterSeparation;
+  const clusterR = cr;
+  const clusterC = (cc + offset): int;
 
-while planted < initialTrees {
-  const i = cr - halfBox +
-            (founderRng.next() * (2 * halfBox + 1)): int;
-  const j = cc - halfBox +
-            (founderRng.next() * (2 * halfBox + 1)): int;
+  var clusterPlanted = 0;
 
-  if Land.contains(i, j) && tree[i, j] == 0 {
-    tree[i, j] = 1;
-    planted += 1;
+  while clusterPlanted < treesPerCluster {
+    const i = clusterR - halfBox +
+              (founderRng.next() * (2 * halfBox + 1)): int;
+    const j = clusterC - halfBox +
+              (founderRng.next() * (2 * halfBox + 1)): int;
+
+    if Land.contains(i, j) && tree[i, j] == 0 {
+      tree[i, j] = 1;
+      clusterPlanted += 1;
+    }
   }
 }
 
