@@ -73,7 +73,7 @@ make_legend() {
   y=$(( top + 3 * row_h ))
   convert "${out}" \
     -font DejaVu-Sans-Oblique -pointsize 11 -fill '#555555' \
-    -annotate +12+$((y + 12)) 'Hue within each species = birth cycle' \
+    -annotate +12+$((y + 12)) 'Shade within species = age at snapshot' \
     "${out}"
 }
 

@@ -45,15 +45,15 @@ const emptyR = 237: int(8);
 const emptyG = 232: int(8);
 const emptyB = 220: int(8);
 
-// Species A — blues (Okabe–Ito #0072B2 → #56B4E9; darker founders → lighter spread).
-const aR = [  0,  0,  0,  0,  0, 26, 51, 77, 86, 122, 157, 184, 208]: [0..maxBirth] int(8);
-const aG = [ 68, 76, 89, 99, 114, 138, 163, 180, 180, 197, 213, 226, 236]: [0..maxBirth] int(8);
-const aB = [136, 136, 153, 168, 178, 194, 210, 225, 233, 239, 244, 248, 251]: [0..maxBirth] int(8);
+// Species A — blues (Okabe–Ito; darker = older at snapshot).
+const aR = [  0,  0,  0, 13, 26, 38, 51, 64, 77,  90, 103, 116, 130]: [0..maxBirth] int(8);
+const aG = [ 80, 92, 105, 118, 131, 144, 157, 163, 180, 190, 200, 210, 220]: [0..maxBirth] int(8);
+const aB = [140, 150, 160, 168, 178, 188, 198, 210, 220, 228, 235, 242, 248]: [0..maxBirth] int(8);
 
-// Species B — oranges (Okabe–Ito #D55E00 → #E69F00 → #F0E442).
-const bR = [153, 179, 204, 213, 230, 238, 245, 255, 255, 255, 255, 255, 255]: [0..maxBirth] int(8);
-const bG = [ 76,  92, 102,  94, 159, 170, 184, 204, 217, 229, 240, 248, 252]: [0..maxBirth] int(8);
-const bB = [  0,   0,   0,   0,   0,  34,  77, 102, 140, 168, 196, 224, 240]: [0..maxBirth] int(8);
+// Species B — oranges; kept saturated so young recruits never fade into soil.
+const bR = [180, 190, 200, 208, 215, 220, 225, 230, 233, 236, 238, 240, 242]: [0..maxBirth] int(8);
+const bG = [ 70,  85, 100, 112, 122, 132, 142, 148, 152, 155, 157, 158, 159]: [0..maxBirth] int(8);
+const bB = [  0,   5,  10,  15,  18,  20,  22,  24,  25,  26,  27,  28,  28]: [0..maxBirth] int(8);
 
 
 proc occupied(val: int): bool {
@@ -68,6 +68,13 @@ proc speciesOf(val: int): int {
 
 proc birthAge(val: int): int {
   return (val % 1000) - 1;
+}
+
+
+// Palette index = tree age at the snapshot cycle (not birth-cycle index).
+proc displayAge(birthCycle: int, snapshotCycle: int): int {
+  const age = snapshotCycle - birthCycle;
+  return min(max(age, 0), maxBirth);
 }
 
 
@@ -125,7 +132,7 @@ proc writeSnapshot(cycle: int) {
 
       if occupied(val) {
         const sp = speciesOf(val);
-        const age = min(birthAge(val), maxBirth);
+        const age = displayAge(birthAge(val), cycle);
 
         if sp == SpeciesA {
           w.writeBinary(aR[age]);

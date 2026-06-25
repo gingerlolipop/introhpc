@@ -95,7 +95,7 @@ Parallel speedup reaches **6.7×** at 32 threads (1.365 s → 0.204 s). The larg
 
 ## 6. Visualization
 
-`tree_viz.chpl` writes PPM frames coloured by **species** (blue vs orange palettes) with lightness shading by birth cycle within each species. `tree_visualize.sh` builds PNGs, a two-species legend, and MP4 videos per thread count.
+`tree_viz.chpl` writes PPM frames coloured by **species** (blue vs orange palettes). Shade within each species reflects **current age at that snapshot** (not birth-cycle index), so short-lived B recruits stay visibly orange. `tree_visualize.sh` builds PNGs, a two-species legend, and MP4 videos per thread count.
 
 ### Key frames (360 × 360 grid, same seed)
 
