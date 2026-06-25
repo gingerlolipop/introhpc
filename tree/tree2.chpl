@@ -8,8 +8,8 @@
       0 = empty
       1 = tree
 
-  The simulation starts with one or more small clusters of founder trees on the
-  landscape. At each cycle, every existing tree is checked.
+  The simulation starts with k founder clusters at random locations, each with a
+  random size. At each cycle, every existing tree is checked.
 
   Reproduction rule:
 
@@ -37,9 +37,9 @@ use Random;
 config const rows = 60;
 config const cols = 60;
 config const steps = 2;
-config const treesPerCluster = 10;
-config const numClusters = 1;
-config const clusterSeparation = 20;
+config const k = 3;
+config const minTreesPerCluster = 10;
+config const maxTreesPerCluster = 100;
 config const radius = 5;
 config const seed = 12345;
 config const report = true;
@@ -58,24 +58,26 @@ var founderRng = new randomStream(real, seed);
 var spreadRng  = new randomStream(real, seed + 1);
 
 
-// Place founder trees in numClusters clusters, each centred on a point along
-// the column axis and separated by clusterSeparation cells.
-const cr = rows / 2;
-const cc = cols / 2;
+// Place k founder clusters at random locations. Each cluster size is drawn
+// uniformly from [minTreesPerCluster, maxTreesPerCluster].
 const halfBox = max(1, radius / 2);
-const initialTrees = treesPerCluster * numClusters;
+const minR = halfBox + 1;
+const maxR = rows - halfBox;
+const minC = halfBox + 1;
+const maxC = cols - halfBox;
+var initialTrees = 0;
 
-for cluster in 0..<numClusters {
-  const offset = ((cluster * 2 - (numClusters - 1)):real / 2.0)
-                 * clusterSeparation;
-  const clusterR = cr;
-  const clusterC = (cc + offset): int;
+for cluster in 0..<k {
+  const clusterSize = minTreesPerCluster +
+    (founderRng.next() * (maxTreesPerCluster - minTreesPerCluster + 1)): int;
+  const clusterR = minR +
+    (founderRng.next() * (maxR - minR + 1)): int;
+  const clusterC = minC +
+    (founderRng.next() * (maxC - minC + 1)): int;
 
   var clusterPlanted = 0;
 
-  // Rejection sampling: draw random cells until treesPerCluster distinct empty
-  // sites are filled in this cluster. Overlapping draws are skipped.
-  while clusterPlanted < treesPerCluster {
+  while clusterPlanted < clusterSize {
     const i = clusterR - halfBox +
               (founderRng.next() * (2 * halfBox + 1)): int;
     const j = clusterC - halfBox +
@@ -86,6 +88,8 @@ for cluster in 0..<numClusters {
       clusterPlanted += 1;
     }
   }
+
+  initialTrees += clusterPlanted;
 }
 
 
